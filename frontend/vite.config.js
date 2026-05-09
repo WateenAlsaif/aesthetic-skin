@@ -12,8 +12,7 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
     },
   },
-  build: {
-    outDir: '../backend/static',
-    emptyOutDir: true,
+  define: {
+    __API_URL__: JSON.stringify('https://aesthetic-skin-api.onrender.com'),
   },
 })
