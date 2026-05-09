@@ -9,7 +9,7 @@ export default function Header() {
   const isDashboard = location.pathname === '/dashboard'
 
   useEffect(() => {
-    axios.get('/health')
+    axios.get('https://aesthetic-skin-api.onrender.com/health')
       .then(() => setApiStatus('online'))
       .catch(() => setApiStatus('offline'))
   }, [])

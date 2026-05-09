@@ -80,9 +80,9 @@ export default function Dashboard() {
         formData.append('temperature', sensors.temperature)
         formData.append('moisture', sensors.moisture)
         formData.append('color_status', sensors.color_status)
-        res = await axios.post('/predict/full', formData)
+        res = await axios.post('https://aesthetic-skin-api.onrender.com/predict/full', formData)
       } else {
-        res = await axios.post('/predict/image', formData)
+        res = await axios.post('https://aesthetic-skin-api.onrender.com/predict/image', formData)
       }
 
       setResult(res.data.data)
