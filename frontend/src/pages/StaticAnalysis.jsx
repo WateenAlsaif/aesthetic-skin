@@ -5,8 +5,8 @@ import {
   ChevronRight, AlertTriangle, Cpu, ArrowLeft, User, Clock
 } from 'lucide-react'
 
-// Real burn wound image from Wikimedia Commons (public domain / CC)
-const BURN_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Burn_blister.jpg/640px-Burn_blister.jpg'
+// Burn wound clinical image — stored locally in /public
+const BURN_IMAGE = '/wound-demo.png'
 
 // Static clinical analysis data
 const ANALYSIS = {
