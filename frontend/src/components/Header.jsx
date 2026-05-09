@@ -1,138 +1,95 @@
-import { Activity, Wifi, ExternalLink } from 'lucide-react'
+import { Activity, Menu, X, LogOut, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import axios from 'axios'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 export default function Header() {
-  const [apiStatus, setApiStatus] = useState('checking')
-  const location = useLocation()
-  const isDashboard = location.pathname === '/dashboard'
+  const [open, setOpen] = useState(false)
+  const [user, setUser] = useState(null)
+  const loc = useLocation()
+  const nav = useNavigate()
 
   useEffect(() => {
-    axios.get('https://aesthetic-skin-api.onrender.com/health')
-      .then(() => setApiStatus('online'))
-      .catch(() => setApiStatus('offline'))
-  }, [])
+    try { setUser(JSON.parse(localStorage.getItem('as_user'))) } catch {}
+  }, [loc])
+
+  useEffect(() => setOpen(false), [loc])
+
+  function logout() {
+    localStorage.removeItem('as_user')
+    nav('/login')
+  }
+
+  const active = p => loc.pathname === p
 
   return (
     <header style={{
-      background: 'rgba(5, 11, 22, 0.92)',
-      borderBottom: '1px solid rgba(56,189,248,0.12)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100,
+      background: 'rgba(255,255,255,.95)',
+      borderBottom: '1px solid rgba(44,123,229,.12)',
+      backdropFilter: 'blur(16px)',
+      position: 'sticky', top: 0, zIndex: 100,
+      boxShadow: '0 2px 16px rgba(44,123,229,.08)',
     }}>
-      <div style={{
-        maxWidth: 1280,
-        margin: '0 auto',
-        padding: '0 24px',
-        height: 60,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
+      <div style={{ maxWidth:1280, margin:'0 auto', padding:'0 16px', height:58, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
 
         {/* Logo */}
-        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 38,
-            height: 38,
-            background: 'linear-gradient(135deg, #f87132, #fbbf24)',
-            borderRadius: 10,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 18px rgba(248,113,50,0.5)',
-            flexShrink: 0,
-          }}>
-            <Activity size={19} color="white" strokeWidth={2.5} />
+        <Link to="/" style={{ textDecoration:'none', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:36,height:36,background:'linear-gradient(135deg,#2c7be5,#0ea5e9)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(44,123,229,.4)',flexShrink:0 }}>
+            <Activity size={18} color="white" strokeWidth={2.5} />
           </div>
           <div>
-            <div className="font-display" style={{
-              fontSize: '1.15rem',
-              color: '#e8f0fe',
-              letterSpacing: '-0.01em',
-              lineHeight: 1.1,
-              fontWeight: 700,
-            }}>
-              Aesthetic <span style={{ color: '#38bdf8' }}>Skin</span>
+            <div className="font-display" style={{ fontSize:'1.08rem',color:'#0f2744',letterSpacing:'-0.01em',lineHeight:1.1,fontWeight:700 }}>
+              Aesthetic <span style={{ color:'#2c7be5' }}>Skin</span>
             </div>
-            <div style={{ fontSize: '0.6rem', color: '#2d4a68', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 1 }}>
-              AI Smart Bandage · ITEX'26
-            </div>
+            <div style={{ fontSize:'.57rem',color:'#93b8d4',letterSpacing:'.1em',textTransform:'uppercase' }}>AI Smart Bandage</div>
           </div>
         </Link>
 
-        {/* Center nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[
-            { label: 'Home', path: '/' },
-            { label: 'Dashboard', path: '/dashboard' },
-          ].map(({ label, path }) => (
-            <Link
-              key={path}
-              to={path}
-              style={{
-                padding: '6px 16px',
-                borderRadius: 8,
-                fontSize: '0.82rem',
-                fontWeight: 500,
-                textDecoration: 'none',
-                color: location.pathname === path ? '#38bdf8' : '#5d7fa3',
-                background: location.pathname === path ? 'rgba(56,189,248,0.08)' : 'transparent',
-                transition: 'all 0.2s',
-              }}
-            >
-              {label}
-            </Link>
+        {/* Desktop nav */}
+        <nav className="hide-m" style={{ display:'flex', alignItems:'center', gap:4 }}>
+          {[{l:'Home',p:'/'},{l:'Dashboard',p:'/dashboard'}].map(({l,p})=>(
+            <Link key={p} to={p} style={{ padding:'6px 16px',borderRadius:8,fontSize:'.81rem',fontWeight:500,textDecoration:'none',color:active(p)?'#2c7be5':'#4a7095',background:active(p)?'rgba(44,123,229,.1)':'transparent',transition:'all .2s' }}>{l}</Link>
           ))}
         </nav>
 
-        {/* Right: API status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: '0.72rem',
-            color: apiStatus === 'online' ? '#34d399' : apiStatus === 'offline' ? '#f87171' : '#5d7fa3',
-            fontFamily: 'JetBrains Mono, monospace',
-          }}>
-            <span
-              className={apiStatus === 'online' ? 'dot-pulse' : ''}
-              style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: apiStatus === 'online' ? '#34d399' : apiStatus === 'offline' ? '#f87171' : '#5d7fa3',
-                display: 'inline-block',
-              }}
-            />
-            <Wifi size={13} />
-            AI {apiStatus}
-          </div>
-
-          <Link
-            to="/dashboard"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 16px',
-              background: 'linear-gradient(135deg, #f87132, #fbbf24)',
-              borderRadius: 8,
-              color: 'white',
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              textDecoration: 'none',
-              boxShadow: '0 4px 14px rgba(248,113,50,0.35)',
-              transition: 'opacity 0.2s',
-            }}
-          >
-            Start Diagnosis <ExternalLink size={12} />
-          </Link>
+        {/* Right */}
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {user && (
+            <div className="hide-m" style={{ display:'flex',alignItems:'center',gap:8 }}>
+              <div style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,#2c7be5,#0ea5e9)',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                <User size={15} color="white" />
+              </div>
+              <div>
+                <div style={{ fontSize:'.72rem',color:'#0f2744',fontWeight:600,lineHeight:1.2 }}>{user.name}</div>
+                <div style={{ fontSize:'.62rem',color:'#93b8d4' }}>Medical Staff</div>
+              </div>
+              <button onClick={logout} style={{ background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,padding:'6px 10px',cursor:'pointer',color:'#dc2626',display:'flex',alignItems:'center',gap:4,fontSize:'.72rem',fontWeight:500 }}>
+                <LogOut size={13}/> Sign Out
+              </button>
+            </div>
+          )}
+          {!user && (
+            <Link to="/login" className="btn" style={{ padding:'7px 18px',fontSize:'.78rem',textDecoration:'none',display:'flex',alignItems:'center' }}>Sign In</Link>
+          )}
+          {/* Burger */}
+          <button onClick={()=>setOpen(!open)} className="show-m" style={{ background:'rgba(44,123,229,.08)',border:'1px solid rgba(44,123,229,.2)',borderRadius:8,padding:'6px',cursor:'pointer',color:'#2c7be5',alignItems:'center',justifyContent:'center' }}>
+            {open?<X size={18}/>:<Menu size={18}/>}
+          </button>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div style={{ background:'white',borderTop:'1px solid rgba(44,123,229,.1)',padding:'12px 16px',display:'flex',flexDirection:'column',gap:4 }}>
+          {[{l:'🏠 Home',p:'/'},{l:'📊 Dashboard',p:'/dashboard'}].map(({l,p})=>(
+            <Link key={p} to={p} style={{ padding:'10px 14px',borderRadius:10,fontSize:'.87rem',fontWeight:500,textDecoration:'none',color:active(p)?'#2c7be5':'#4a7095',background:active(p)?'rgba(44,123,229,.08)':'transparent' }}>{l}</Link>
+          ))}
+          {user && (
+            <button onClick={logout} style={{ marginTop:4,padding:'10px 14px',borderRadius:10,fontSize:'.87rem',fontWeight:500,background:'rgba(239,68,68,.06)',border:'1px solid rgba(239,68,68,.15)',color:'#dc2626',cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:7 }}>
+              <LogOut size={14}/> Sign Out ({user.name})
+            </button>
+          )}
+        </div>
+      )}
     </header>
   )
 }
