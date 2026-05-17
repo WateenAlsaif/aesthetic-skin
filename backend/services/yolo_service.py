@@ -1,21 +1,24 @@
 """
-YOLO Service — Burn Wound Image Detection
-Uses trained YOLOv8 model to detect and classify burn severity.
+YOLO Service — Burn Wound Image Classification
+================================================
+Supports the trained YOLOv8 classification model (yolov8n-cls / yolov8s-cls).
+Fully backwards-compatible: also handles detection models if best.pt is detection.
 
-Classes:
-  0 → Mild burn (1st degree)
-  1 → Moderate burn (2nd degree)
-  2 → Severe burn (3rd degree)
+Model is loaded once at first call (lazy load) and cached for the server lifetime.
+To hot-swap: replace backend/model/best.pt and call reload_model() or restart.
+
+Classes (match training dataset):
+  0 → Mild     (1st degree — superficial)
+  1 → Moderate (2nd degree — partial thickness)
+  2 → Severe   (3rd degree — full thickness)
 """
 
-import os
 from pathlib import Path
-from typing import Optional
-import numpy as np
 from PIL import Image
 
-# Lazy-load ultralytics to avoid slow startup
-_model = None
+# ─── Lazy model cache ──────────────────────────────────────
+_model       = None
+_model_type  = None   # "classify" | "detect"
 
 MODEL_PATH = Path(__file__).parent.parent / "model" / "best.pt"
 
@@ -32,73 +35,121 @@ CLASS_DESCRIPTIONS = {
 }
 
 
+# ─── Model loading ─────────────────────────────────────────
+
+def reload_model():
+    """Force-reload the model from disk. Call after replacing best.pt."""
+    global _model, _model_type
+    _model      = None
+    _model_type = None
+    _load_model()
+
+
 def _load_model():
-    global _model
-    if _model is None:
-        if not MODEL_PATH.exists():
-            raise FileNotFoundError(
-                f"YOLO model not found at {MODEL_PATH}. "
-                "Run training/train_yolo.py first to train and save the model."
-            )
-        from ultralytics import YOLO
-        _model = YOLO(str(MODEL_PATH))
+    global _model, _model_type
+
+    if _model is not None:
+        return _model
+
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"YOLO model not found at {MODEL_PATH}. "
+            "Run training/train_yolo.py first, or copy best.pt to backend/model/."
+        )
+
+    from ultralytics import YOLO
+    model = YOLO(str(MODEL_PATH))
+
+    # Auto-detect task type from model metadata
+    task = getattr(model, "task", None)
+    if task is None:
+        # Fallback: check model name string
+        name = str(MODEL_PATH).lower()
+        task = "classify" if "cls" in name else "detect"
+
+    _model      = model
+    _model_type = "classify" if task == "classify" else "detect"
     return _model
 
 
+# ─── Inference ─────────────────────────────────────────────
+
 def predict_burn_image(image: Image.Image) -> dict:
     """
-    Run YOLO inference on a PIL Image.
+    Run inference on a PIL Image.
 
-    Returns:
-        dict with:
-          - burn_class (int): 0, 1, or 2
-          - burn_label (str): "Mild", "Moderate", or "Severe"
-          - confidence (float): 0.0 – 1.0
-          - description (str): clinical description
-          - detections (list): all bounding boxes found
+    Returns dict matching the shape the rest of the backend expects:
+      burn_class       int     0 / 1 / 2
+      burn_label       str     "Mild" / "Moderate" / "Severe"
+      confidence       float   0.0 – 1.0
+      description      str     clinical description
+      detections       list    all bounding boxes (empty for classification)
+      total_detections int
+      all_probs        dict    {label: probability}  (classification only)
     """
     model = _load_model()
 
-    # Run inference
     results = model(image, verbose=False)
 
-    detections = []
-    best_class = 0
-    best_conf = 0.0
+    burn_class  = 0
+    burn_conf   = 0.0
+    detections  = []
+    all_probs   = {}
 
-    for result in results:
-        if result.boxes is not None:
-            for box in result.boxes:
-                cls = int(box.cls[0].item())
+    if _model_type == "classify":
+        # ── Classification model ──────────────────────────
+        probs = results[0].probs
+        if probs is not None:
+            burn_class = int(probs.top1)
+            burn_conf  = float(probs.top1conf)
+            raw        = probs.data.tolist()
+            all_probs  = {
+                CLASS_NAMES.get(i, str(i)): round(float(p), 4)
+                for i, p in enumerate(raw)
+                if i in CLASS_NAMES
+            }
+        else:
+            # Shouldn't happen, but handle gracefully
+            burn_class = 0
+            burn_conf  = 0.0
+            all_probs  = {v: 0.0 for v in CLASS_NAMES.values()}
+
+    else:
+        # ── Detection model (legacy / fallback) ──────────
+        import numpy as np
+
+        boxes = results[0].boxes
+        if boxes is not None and len(boxes) > 0:
+            confs     = boxes.conf.cpu().numpy()
+            best_idx  = int(np.argmax(confs))
+            burn_class = int(boxes.cls[best_idx].cpu().numpy())
+            burn_conf  = float(confs[best_idx])
+
+            for box in boxes:
+                cls  = int(box.cls[0].item())
                 conf = float(box.conf[0].item())
                 xyxy = box.xyxy[0].tolist()
                 detections.append({
-                    "class_id": cls,
+                    "class_id":   cls,
                     "class_name": CLASS_NAMES.get(cls, "Unknown"),
                     "confidence": round(conf, 4),
-                    "bbox": [round(v, 1) for v in xyxy],
+                    "bbox":       [round(v, 1) for v in xyxy],
                 })
-                # Track highest-confidence detection
-                if conf > best_conf:
-                    best_conf = conf
-                    best_class = cls
-
-    # If no detections, run classification-style (take highest class score)
-    if not detections:
-        probs = results[0].probs
-        if probs is not None:
-            best_class = int(probs.top1)
-            best_conf = float(probs.top1conf.item())
         else:
-            # Fallback: no detections found
-            best_class = 0
-            best_conf = 0.3
+            # No detections — return low-confidence mild
+            burn_class = 0
+            burn_conf  = 0.1
+
+        all_probs = {v: 0.0 for v in CLASS_NAMES.values()}
+        all_probs[CLASS_NAMES.get(burn_class, str(burn_class))] = round(burn_conf, 4)
 
     return {
-        "burn_class": best_class,
-        "burn_label": CLASS_NAMES.get(best_class, "Unknown"),
-        "confidence": round(best_conf, 4),
-        "description": CLASS_DESCRIPTIONS.get(best_class, ""),
-        "detections": detections,
-        "total_detections": len(detections),
+        "burn_class":        burn_class,
+        "burn_label":        CLASS_NAMES.get(burn_class, "Unknown"),
+        "confidence":        round(burn_conf, 4),
+        "description":       CLASS_DESCRIPTIONS.get(burn_class, ""),
+        "detections":        detections,
+        "total_detections":  len(detections),
+        "all_probs":         all_probs,
+        "model_type":        _model_type or "unknown",
     }
